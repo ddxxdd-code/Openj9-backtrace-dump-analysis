@@ -12,3 +12,5 @@ create_callsite.sh accepts one or two arguments.
 This will run translation `addr2func.py` on `<input_name>.txt` and pass outputs to `<input_name>_translated_shorted[_<postfix>].txt`
 
 Then will run analysis program `get_callsite.py` to get callsites and store in the file `<input_name>_translated_shorted[_<postfix>]_callsite.txt`
+
+Requirement for running backtrace_analyzer.py: need python of version 3.7+
