@@ -153,8 +153,8 @@ def main():
         sys.stderr.write("Total regions: " + str(len(regionList)) + "\n")
         sys.stderr.write("Total offsets: " + str(len(offsetList)) + "\n")
 
-    translationTable = {}
     if args.batch_size:
+        translationTable = {}
         i = 0
         step = args.batch_size
         for i in range(0, len(offsetList), step):
@@ -162,7 +162,7 @@ def main():
             translationTable = build_translation_table(args.executable_file_path, offsetList[i:i+step], translationTable, args.keep_prefix)
     else:
         if args.verbose: sys.stderr.write("translating all offsets\n")
-        translationTable = build_translation_table(args.executable_file_path, offsetList, translationTable, args.keep_prefix)
+        translationTable = build_translation_table(args.executable_file_path, offsetList, {}, args.keep_prefix)
     
     if args.verbose: sys.stderr.write("translating callsites\n")
     regionList = get_translated_callsites(regionList, translationTable, args.translation_only, args.callsite_only)
