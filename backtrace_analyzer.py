@@ -158,7 +158,7 @@ def main():
         i = 0
         step = args.batch_size
         for i in range(0, len(offsetList), step):
-            if args.verbose: sys.stderr.write("translating " + str(i) + " to " + str(i+step) + "of all offsets\n")
+            if args.verbose: sys.stderr.write("translating " + str(i) + " to " + str(i+step) + " of all offsets\n")
             translationTable = build_translation_table(args.executable_file_path, offsetList[i:i+step], translationTable, args.keep_prefix)
     else:
         if args.verbose: sys.stderr.write("translating all offsets\n")
