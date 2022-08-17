@@ -139,6 +139,12 @@ def main():
 
     args = parser.parse_args()
 
+    # Check Python Version. >=3.7 is needed for subprocess.run with text=True argument
+    if args.verbose: sys.stderr.write("Python version:\n" + sys.version + '\n')
+    if sys.version_info.major < 3 or sys.version_info.minor < 7:
+        sys.stderr.write("Python version >= 3.7 is needed\n")
+        exit(1)
+
     if args.verbose: sys.stderr.write("reading from " + args.input_file + "\n")
     with open(args.input_file, "r") as input:
         regionList, offsetList = read_regions(input)
