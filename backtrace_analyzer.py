@@ -18,6 +18,55 @@ catch_list = ["TR_LoopVersioner::emitExpr",
 "TR_GlobalRegisterAllocator::findLoopsAndCorrespondingAutos",
 "TR_GlobalRegisterAllocator::markAutosUsedIn"]
 
+def main():
+    parser = argparse.ArgumentParser()
+    # Required arguments:
+    parser.add_argument("input_file", type=str, help="name of the input file")
+    parser.add_argument("executable_file_path", type=str, help="path to target executable file in the form /DIR/file.so")
+    # Optional arguments
+    parser.add_argument("-o", "--output-file", type=str, help="name of the output file, default to <inputFile>_translated_callsites.txt")
+    parser.add_argument("-t", "--translation-only", action="store_true", help="set to only translates offsets do no call site find")
+    parser.add_argument("-c", "--callsite-only", action="store_true", help="set to only keep the line of callsite in all back traces")
+    parser.add_argument("-b", "--batch-size", type=int, help="integer for batch size of input to addr2line")
+    parser.add_argument("-kp", "--keep-prefix", action="store_true", help="set to keep prefix in translated lines")
+    parser.add_argument("-v", "--verbose", action="store_true", help="set to run in verbose mode")
+
+    args = parser.parse_args()
+
+    # Check Python Version. >=3.7 is needed for subprocess.run with text=True argument
+    if args.verbose: sys.stderr.write("Python version:\n" + sys.version + '\n')
+    if sys.version_info.major < 3 or sys.version_info.minor < 7:
+        sys.stderr.write("Python version >= 3.7 is needed\n")
+        exit(1)
+
+    if args.verbose: sys.stderr.write("reading from " + args.input_file + "\n")
+    with open(args.input_file, "r") as input:
+        regionList, offsetList = read_regions(input)
+
+    if args.verbose:
+        sys.stderr.write("Total regions: " + str(len(regionList)) + "\n")
+        sys.stderr.write("Total offsets: " + str(len(offsetList)) + "\n")
+
+    if args.batch_size:
+        translationTable = {}
+        i = 0
+        step = args.batch_size
+        for i in range(0, len(offsetList), step):
+            if args.verbose: sys.stderr.write("translating " + str(i) + " to " + str(i+step) + " of all offsets\n")
+            translationTable = build_translation_table(args.executable_file_path, offsetList[i:i+step], translationTable, args.keep_prefix)
+    else:
+        if args.verbose: sys.stderr.write("translating all offsets\n")
+        translationTable = build_translation_table(args.executable_file_path, offsetList, {}, args.keep_prefix)
+    
+    if args.verbose: sys.stderr.write("translating callsites\n")
+    regionList = get_translated_callsites(regionList, translationTable, args.translation_only, args.callsite_only)
+    
+    fileOut = args.output_file if args.output_file else args.inputFile[:args.inputFile.find('.')]+"_translated_callsites.txt"
+    if args.verbose: sys.stderr.write("writing to output file " + fileOut + "\n")
+    with open(fileOut, "w") as output:
+        write_results(regionList, output)
+    if args.verbose: sys.stderr.write("finished writing to file " + fileOut + "\nprogram finished\n")
+
 def skip_line(line):
     for seg in skip_list:
         if line.find(seg) != -1:
@@ -33,7 +82,8 @@ def catch_line(line):
 def get_callsite(backTraceList, callsiteOnly):
     trimmed = backTraceList
     for i in range(1, len(backTraceList)):
-        if (backTraceList[i][1].find("/omr/") != -1 or backTraceList[i][1].find("/openj9/") != -1) and (catch_line(backTraceList[i][1]) or not skip_line(backTraceList[i][1])):
+        if (backTraceList[i][1].find("/omr/") != -1 or backTraceList[i][1].find("/openj9/") != -1) \
+            and (catch_line(backTraceList[i][1]) or not skip_line(backTraceList[i][1])):
             trimmed = [backTraceList[i]] if callsiteOnly else backTraceList[:i+1]
             if i < len(backTraceList) - 2:
                 trimmed.append([backTraceList[i+1][0], ""])
@@ -123,55 +173,6 @@ def write_results(regionList, file):
             for function, line in allocationBackTraceOffsets:
                 file.write(line[:-1] + "; " + function + '\n')
         file.write("=== End of a region ===\n")
-
-def main():
-    parser = argparse.ArgumentParser()
-    # Required arguments:
-    parser.add_argument("input_file", type=str, help="name of the input file")
-    parser.add_argument("executable_file_path", type=str, help="path to target executable file in the form /DIR/file.so")
-    # Optional arguments
-    parser.add_argument("-o", "--output-file", type=str, help="name of the output file, default to <inputFile>_translated_callsites.txt")
-    parser.add_argument("-t", "--translation-only", action="store_true", help="set to only translates offsets do no call site find")
-    parser.add_argument("-c", "--callsite-only", action="store_true", help="set to only keep the line of callsite in all back traces")
-    parser.add_argument("-b", "--batch-size", type=int, help="integer for batch size of input to addr2line")
-    parser.add_argument("-kp", "--keep-prefix", action="store_true", help="set to keep prefix in translated lines")
-    parser.add_argument("-v", "--verbose", action="store_true", help="set to run in verbose mode")
-
-    args = parser.parse_args()
-
-    # Check Python Version. >=3.7 is needed for subprocess.run with text=True argument
-    if args.verbose: sys.stderr.write("Python version:\n" + sys.version + '\n')
-    if sys.version_info.major < 3 or sys.version_info.minor < 7:
-        sys.stderr.write("Python version >= 3.7 is needed\n")
-        exit(1)
-
-    if args.verbose: sys.stderr.write("reading from " + args.input_file + "\n")
-    with open(args.input_file, "r") as input:
-        regionList, offsetList = read_regions(input)
-
-    if args.verbose:
-        sys.stderr.write("Total regions: " + str(len(regionList)) + "\n")
-        sys.stderr.write("Total offsets: " + str(len(offsetList)) + "\n")
-
-    if args.batch_size:
-        translationTable = {}
-        i = 0
-        step = args.batch_size
-        for i in range(0, len(offsetList), step):
-            if args.verbose: sys.stderr.write("translating " + str(i) + " to " + str(i+step) + " of all offsets\n")
-            translationTable = build_translation_table(args.executable_file_path, offsetList[i:i+step], translationTable, args.keep_prefix)
-    else:
-        if args.verbose: sys.stderr.write("translating all offsets\n")
-        translationTable = build_translation_table(args.executable_file_path, offsetList, {}, args.keep_prefix)
-    
-    if args.verbose: sys.stderr.write("translating callsites\n")
-    regionList = get_translated_callsites(regionList, translationTable, args.translation_only, args.callsite_only)
-    
-    fileOut = args.output_file if args.output_file else args.inputFile[:args.inputFile.find('.')]+"_translated_callsites.txt"
-    if args.verbose: sys.stderr.write("writing to output file " + fileOut + "\n")
-    with open(fileOut, "w") as output:
-        write_results(regionList, output)
-    if args.verbose: sys.stderr.write("finished writing to file " + fileOut + "\nprogram finished\n")
 
 if __name__ == "__main__":
     main()
