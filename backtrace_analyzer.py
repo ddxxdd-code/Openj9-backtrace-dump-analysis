@@ -1,17 +1,15 @@
 # Analyzing tool for dumped back traces of reion allocations
 # Dedong Xie 20220815
-# Phase 1: implement translation
-# Phase 2: implement call site find
+# Phase 1: implement translation DONE 0815 Reduce reading overhead 0816
+# Phase 2: implement call site find DONE 0817
 # phase 3: implement parser of options
 
 # Input form: 
 # python3 backtrace_analyzer.py <input file> <path to libj9jit29.so> <output file>
-import os
 import subprocess
-import io
 import sys
 
-prefixLength = len("/mnt/nvme/dedong2022/jdk/openj9-openjdk-jdk17")
+prefixLength = len("/mnt/nvme/dedong2022/jdk/openj9-openjdk-jdk17/build/release/vm/runtime/compiler/../../../../..")
 
 skip_list = ["allocate", "TypedAllocator", "heap_allocator"]
 catch_list = ["TR_LoopVersioner::emitExpr", 
@@ -20,6 +18,7 @@ catch_list = ["TR_LoopVersioner::emitExpr",
 "TR_UseDefInfo::dereferenceDef", 
 "TR_GlobalRegisterAllocator::findLoopsAndCorrespondingAutos",
 "TR_GlobalRegisterAllocator::markAutosUsedIn"]
+
 def skip_line(line):
     for seg in skip_list:
         if line.find(seg) != -1:
@@ -38,7 +37,7 @@ def get_callsite(backTraceList):
         if (backTraceList[i][1].find("/omr/") != -1 or backTraceList[i][1].find("/openj9/") != -1) and (catch_line(backTraceList[i][1]) or not skip_line(backTraceList[i][1])):
             trimmed = backTraceList[:i+1]
             if i < len(backTraceList) - 2:
-                trimmed.append(backTraceList[i+1][1]+'\n')
+                trimmed.append(["", backTraceList[i+1][1]+'\n'])
             return trimmed
     return trimmed
 
@@ -100,16 +99,16 @@ def get_translated_callsites(regionList, funcDict):
     for methodCompiled, regionType, constructorBackTrace, allocations in regionList:
         regionBackTraceList = []
         for offset in constructorBackTrace:
-            regionBackTraceList.append([funcDict[offset]])
+            regionBackTraceList.append(funcDict[offset])
         allocationList = []
         for allocationSize, allocationBackTraceOffsets in allocations:
             allocationBackTraceList = []
             for offset in allocationBackTraceOffsets:
-                allocationBackTraceList.append([funcDict[offset]])
+                allocationBackTraceList.append(funcDict[offset])
                 # Here, funcDict's value is a pair of function name and line
                 # We care about the line.
                 allocationBackTraceList = get_callsite(allocationBackTraceList)
-            allocationList.append(allocationSize, allocationBackTraceList)
+            allocationList.append([allocationSize, allocationBackTraceList])
         translatedRegionList.append([methodCompiled, regionType, regionBackTraceList, allocationList])
     return translatedRegionList
 
