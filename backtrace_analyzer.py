@@ -2,12 +2,11 @@
 # Dedong Xie 20220815
 # Phase 1: implement translation DONE 0815 Reduce reading overhead 0816
 # Phase 2: implement call site find DONE 0817
-# phase 3: implement parser of options
+# phase 3: implement parser of options DONE 0817
 
-# Input form: 
-# python3 backtrace_analyzer.py <input file> <path to libj9jit29.so> <output file>
 import subprocess
 import sys
+import argparse
 
 prefixLength = len("/mnt/nvme/dedong2022/jdk/openj9-openjdk-jdk17/build/release/vm/runtime/compiler/../../../../..")
 
@@ -31,18 +30,18 @@ def catch_line(line):
             return True
     return False
 
-def get_callsite(backTraceList):
+def get_callsite(backTraceList, callsiteOnly):
     trimmed = backTraceList
     for i in range(1, len(backTraceList)):
         if (backTraceList[i][1].find("/omr/") != -1 or backTraceList[i][1].find("/openj9/") != -1) and (catch_line(backTraceList[i][1]) or not skip_line(backTraceList[i][1])):
-            trimmed = backTraceList[:i+1]
+            trimmed = [backTraceList[i]] if callsiteOnly else backTraceList[:i+1]
             if i < len(backTraceList) - 2:
-                trimmed.append(["", backTraceList[i+1][1]+'\n'])
+                trimmed.append([backTraceList[i+1][0], ""])
             return trimmed
     return trimmed
 
 # From list of offsets, build dict to translate from offset to lines
-def build_translation_table(executableFilePath, offsetList, funcDict):
+def build_translation_table(executableFilePath, offsetList, funcDict, keepPrefix):
     args = ["addr2line", "-e", executableFilePath, "-f", "-C"]
     args += offsetList
     output = subprocess.run(args, capture_output=True, text=True).stdout
@@ -51,7 +50,7 @@ def build_translation_table(executableFilePath, offsetList, funcDict):
         print("Translation error")
         return {}
     for i in range(len(offsetList)):
-        funcDict[offsetList[i]] = [output[2*i], output[2*i+1][prefixLength:]]
+        funcDict[offsetList[i]] = [output[2*i], output[2*i+1][0 if keepPrefix else prefixLength:]]
     return funcDict
 
 # Read from formatted lines produce list of all regions and all offsets of interest
@@ -94,7 +93,7 @@ def read_regions(file):
     return regionList, list(offsetSet)
 
 # Translate and get callsites
-def get_translated_callsites(regionList, funcDict):
+def get_translated_callsites(regionList, funcDict, translateOnly, callsiteOnly):
     translatedRegionList = []
     for methodCompiled, regionType, constructorBackTrace, allocations in regionList:
         regionBackTraceList = []
@@ -104,10 +103,11 @@ def get_translated_callsites(regionList, funcDict):
         for allocationSize, allocationBackTraceOffsets in allocations:
             allocationBackTraceList = []
             for offset in allocationBackTraceOffsets:
-                allocationBackTraceList.append(funcDict[offset])
                 # Here, funcDict's value is a pair of function name and line
-                # We care about the line.
-                allocationBackTraceList = get_callsite(allocationBackTraceList)
+                # We assume offset is a key in the dict
+                allocationBackTraceList.append(funcDict[offset])
+                # Find callsite from translated call back traces
+                if not translateOnly: allocationBackTraceList = get_callsite(allocationBackTraceList, callsiteOnly)
             allocationList.append([allocationSize, allocationBackTraceList])
         translatedRegionList.append([methodCompiled, regionType, regionBackTraceList, allocationList])
     return translatedRegionList
@@ -124,20 +124,48 @@ def write_results(regionList, file):
                 file.write(line[:-1] + "; " + function + '\n')
         file.write("=== End of a region ===\n")
 
-if __name__ == "__main__":
-    fileName = sys.argv[1]
-    sys.stderr.write("reading from " + fileName + "\n")
-    with open(fileName, "r") as input:
+def main():
+    parser = argparse.ArgumentParser()
+    # Required arguments:
+    parser.add_argument("input_file", type=str, help="name of the input file")
+    parser.add_argument("executable_file_path", type=str, help="path to target executable file in the form /DIR/file.so")
+    # Optional arguments
+    parser.add_argument("-o", "--output-file", type=str, help="name of the output file, default to <inputFile>_translated_callsites.txt")
+    parser.add_argument("-t", "--translation-only", action="store_true", help="set to only translates offsets do no call site find")
+    parser.add_argument("-c", "--callsite-only", action="store_true", help="set to only keep the line of callsite in all back traces")
+    parser.add_argument("-b", "--batch-size", type=int, help="integer for batch size of input to addr2line")
+    parser.add_argument("-kp", "--keep-prefix", action="store_true", help="set to keep prefix in translated lines")
+    parser.add_argument("-v", "--verbose", action="store_true", help="set to run in verbose mode")
+
+    args = parser.parse_args()
+
+    if args.verbose: sys.stderr.write("reading from " + args.input_file + "\n")
+    with open(args.input_file, "r") as input:
         regionList, offsetList = read_regions(input)
+
+    if args.verbose:
+        sys.stderr.write("Total regions: " + str(len(regionList)) + "\n")
+        sys.stderr.write("Total offsets: " + str(len(offsetList)) + "\n")
+
     translationTable = {}
-    sys.stderr.write("Total regions: " + str(len(regionList)) + "\n")
-    sys.stderr.write("Total offsets: " + str(len(offsetList)) + "\n")
-    i = 0
-    step = 10000
-    for i in range(0, len(offsetList), step):
-        translationTable = build_translation_table(sys.argv[2]+"libj9jit29.so", offsetList[i:i+step], translationTable)
-    regionList = get_translated_callsites(regionList, translationTable)
-    fileOut = sys.argv[3]
+    if args.batch_size:
+        i = 0
+        step = args.batch_size
+        for i in range(0, len(offsetList), step):
+            if args.verbose: sys.stderr.write("translating " + str(i) + " to " + str(i+step) + "of all offsets\n")
+            translationTable = build_translation_table(args.executable_file_path, offsetList[i:i+step], translationTable, args.keep_prefix)
+    else:
+        if args.verbose: sys.stderr.write("translating all offsets\n")
+        translationTable = build_translation_table(args.executable_file_path, offsetList, translationTable, args.keep_prefix)
+    
+    if args.verbose: sys.stderr.write("translating callsites\n")
+    regionList = get_translated_callsites(regionList, translationTable, args.translation_only, args.callsite_only)
+    
+    fileOut = args.output_file if args.output_file else args.inputFile[:args.inputFile.find('.')]+"_translated_callsites.txt"
+    if args.verbose: sys.stderr.write("writing to output file " + fileOut + "\n")
     with open(fileOut, "w") as output:
         write_results(regionList, output)
-    
+    if args.verbose: sys.stderr.write("finished writing to file " + fileOut + "\nprogram finished\n")
+
+if __name__ == "__main__":
+    main()
