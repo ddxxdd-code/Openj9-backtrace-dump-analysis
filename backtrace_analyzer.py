@@ -48,7 +48,7 @@ def build_translation_table(executableFilePath, offsetList, funcDict, prefixLeng
     output = subprocess.run(args, stdout=subprocess.PIPE, universal_newlines=True).stdout
     output = output.splitlines()
     if len(output) != 2 * len(offsetList):
-        print("Translation error")
+        sys.stderr.write("Translation error\n")
         return {}
     for i in range(len(offsetList)):
         funcDict[offsetList[i]] = [output[2*i], output[2*i+1][prefixLength:]]
