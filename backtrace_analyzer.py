@@ -82,17 +82,18 @@ def write_translated_callsites(inputFile, funcDict, outputFile, translateOnly, c
             if allocationList != []:
                 # print header
                 outputFile.write(regionType + ": " + methodCompiled)
-                for function, line in constructorBackTrace:
-                    outputFile.write(line[:-1] + "; " + function + '\n')
+                for function, callLine in constructorBackTrace:
+                    outputFile.write(callLine[:-1] + "; " + function + '\n')
                 # print allocations
                 allocationList.sort(reverse=True, key=lambda x: x[0])
                 for allocationSize, allocationBackTraceList in allocationList:
                     outputFile.write("Allocated " + str(allocationSize) + " bytes\n")
-                    for function, line in allocationBackTraceList:
-                        outputFile.write(line[:-1] + "; " + function + '\n')
+                    for function, callLine in allocationBackTraceList:
+                        outputFile.write(callLine[:-1] + "; " + function + '\n')
                 outputFile.write("=== End of a region ===\n")
                 allocationList = []
                 constructorBackTrace = []
+                regionType, methodCompiled = "", ""
             # Start of header for a region
             methodCompiled = line
             line = inputFile.readline()
