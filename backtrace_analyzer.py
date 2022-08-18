@@ -8,8 +8,6 @@ import subprocess
 import sys
 import argparse
 
-prefixLength = len("/mnt/nvme/dedong2022/jdk/openj9-openjdk-jdk17/build/release/vm/runtime/compiler/../../../../..")
-
 skip_list = ["allocate", "TypedAllocator", "heap_allocator"]
 catch_list = ["TR_LoopVersioner::emitExpr", 
 "RematTools::walkTreesCalculatingRematSafety", 
@@ -29,15 +27,10 @@ def main():
     parser.add_argument("-c", "--callsite-only", action="store_true", help="set to only keep the line of callsite in all back traces")
     parser.add_argument("-b", "--batch-size", type=int, help="integer for batch size of input to addr2line")
     parser.add_argument("-kp", "--keep-prefix", action="store_true", help="set to keep prefix in translated lines")
+    parser.add_argument("-p", "--prefix", type=str, help="common prefix to be removed from translated lines")
     parser.add_argument("-v", "--verbose", action="store_true", help="set to run in verbose mode")
 
     args = parser.parse_args()
-
-    # Check Python Version. >=3.7 is needed for subprocess.run with text=True argument
-    if args.verbose: sys.stderr.write("Python version:\n" + sys.version + '\n')
-    if sys.version_info.major < 3 or sys.version_info.minor < 7:
-        sys.stderr.write("Python version >= 3.7 is needed\n")
-        exit(1)
 
     if args.verbose: sys.stderr.write("reading from " + args.input_file + "\n")
     with open(args.input_file, "r") as input:
@@ -47,16 +40,20 @@ def main():
         sys.stderr.write("Total regions: " + str(len(regionList)) + "\n")
         sys.stderr.write("Total offsets: " + str(len(offsetList)) + "\n")
 
+    pathPrefix = args.prefix if args.prefix else '/'.join(args.executable_file_path.split('/')[:-4]) + "/vm/runtime/compiler/../../../../.."
+    prefixLength = len(pathPrefix)
+    if args.verbose and not args.keep_prefix: sys.stderr.write("prefix to be removed from translated lines: " + pathPrefix + "\n")
+
     if args.batch_size:
         translationTable = {}
         i = 0
         step = args.batch_size
         for i in range(0, len(offsetList), step):
             if args.verbose: sys.stderr.write("translating " + str(i) + " to " + str(i+step) + " of all offsets\n")
-            translationTable = build_translation_table(args.executable_file_path, offsetList[i:i+step], translationTable, args.keep_prefix)
+            translationTable = build_translation_table(args.executable_file_path, offsetList[i:i+step], translationTable, 0 if args.keep_prefix else prefixLength)
     else:
         if args.verbose: sys.stderr.write("translating all offsets\n")
-        translationTable = build_translation_table(args.executable_file_path, offsetList, {}, args.keep_prefix)
+        translationTable = build_translation_table(args.executable_file_path, offsetList, {}, 0 if args.keep_prefix else prefixLength)
     
     if args.verbose: sys.stderr.write("translating callsites\n")
     regionList = get_translated_callsites(regionList, translationTable, args.translation_only, args.callsite_only)
@@ -91,16 +88,16 @@ def get_callsite(backTraceList, callsiteOnly):
     return trimmed
 
 # From list of offsets, build dict to translate from offset to lines
-def build_translation_table(executableFilePath, offsetList, funcDict, keepPrefix):
+def build_translation_table(executableFilePath, offsetList, funcDict, prefixLength):
     args = ["addr2line", "-e", executableFilePath, "-f", "-C"]
     args += offsetList
-    output = subprocess.run(args, capture_output=True, text=True).stdout
+    output = subprocess.run(args, atdout=subprocess.PIPE, universal_newlines=True).stdout
     output = output.split('\n')[:-1]
     if len(output) != 2 * len(offsetList):
         print("Translation error")
         return {}
     for i in range(len(offsetList)):
-        funcDict[offsetList[i]] = [output[2*i], output[2*i+1][0 if keepPrefix else prefixLength:]]
+        funcDict[offsetList[i]] = [output[2*i], output[2*i+1][prefixLength:]]
     return funcDict
 
 # Read from formatted lines produce list of all regions and all offsets of interest
