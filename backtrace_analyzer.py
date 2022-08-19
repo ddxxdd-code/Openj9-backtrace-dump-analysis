@@ -42,7 +42,7 @@ def get_callsite(backTraceList, callsiteOnly):
     return trimmed
 
 # From list of offsets, build dict to translate from offset to lines
-def build_translation_table(executableFilePath, offsetList, funcDict, prefixLength):
+def build_translation_table(executableFilePath, offsetList, funcDict):
     args = ["addr2line", "-e", executableFilePath, "-f", "-C"]
     args += offsetList
     output = subprocess.run(args, stdout=subprocess.PIPE, universal_newlines=True).stdout
@@ -51,7 +51,12 @@ def build_translation_table(executableFilePath, offsetList, funcDict, prefixLeng
         sys.stderr.write("Translation error\n")
         return {}
     for i in range(len(offsetList)):
-        funcDict[offsetList[i]] = [output[2*i], output[2*i+1][prefixLength:]]
+        line = output[2*i+1]
+        if "/openj9/" in line:
+            line = line[line.find("/openj9/"):]
+        if "/omr/" in line:
+            line = line[line.find("/omr/"):]
+        funcDict[offsetList[i]] = [output[2*i], line]
     return funcDict
 
 # Read from formatted lines produce list of all offsets of interest
@@ -137,12 +142,10 @@ def main():
     parser.add_argument("input_file", type=str, help="name of the input file")
     parser.add_argument("executable_file_path", type=str, help="path to target executable file in the form /DIR/file.so")
     # Optional arguments
+    parser.add_argument("-b", "--batch-size", type=int, default=10000, help="integer for batch size of input to addr2line")
+    parser.add_argument("-c", "--callsite-only", action="store_true", help="set to only keep the line of callsite in all back traces")
     parser.add_argument("-o", "--output-file", type=str, help="name of the output file, default to <inputFile>_translated_callsites.txt")
     parser.add_argument("-t", "--translation-only", action="store_true", help="set to only translates offsets do no call site find")
-    parser.add_argument("-c", "--callsite-only", action="store_true", help="set to only keep the line of callsite in all back traces")
-    parser.add_argument("-b", "--batch-size", type=int, help="integer for batch size of input to addr2line")
-    parser.add_argument("-kp", "--keep-prefix", action="store_true", help="set to keep prefix in translated lines")
-    parser.add_argument("-p", "--prefix", type=str, help="common prefix to be removed from translated lines")
     parser.add_argument("-v", "--verbose", action="store_true", help="set to run in verbose mode")
 
     args = parser.parse_args()
@@ -154,20 +157,12 @@ def main():
     if args.verbose:
         sys.stderr.write("Total offsets: " + str(len(offsetList)) + "\n")
 
-    pathPrefix = args.prefix if args.prefix else '/'.join(args.executable_file_path.split('/')[:-4]) + "/vm/runtime/compiler/../../../../.."
-    prefixLength = len(pathPrefix)
-    if args.verbose and not args.keep_prefix: sys.stderr.write("prefix to be removed from translated lines: " + pathPrefix + "\n")
-
-    if args.batch_size:
-        translationTable = {}
-        i = 0
-        step = args.batch_size
-        for i in range(0, len(offsetList), step):
-            if args.verbose: sys.stderr.write("translating " + str(i) + " to " + str(i+step) + " of all offsets\n")
-            translationTable = build_translation_table(args.executable_file_path, offsetList[i:i+step], translationTable, 0 if args.keep_prefix else prefixLength)
-    else:
-        if args.verbose: sys.stderr.write("translating all offsets\n")
-        translationTable = build_translation_table(args.executable_file_path, offsetList, {}, 0 if args.keep_prefix else prefixLength)
+    translationTable = {}
+    i = 0
+    step = args.batch_size
+    for i in range(0, len(offsetList), step):
+        if args.verbose: sys.stderr.write("translating " + str(i) + " to " + str(i+step) + " of all offsets\n")
+        translationTable = build_translation_table(args.executable_file_path, offsetList[i:i+step], translationTable)
     
     fileOut = args.output_file if args.output_file else args.inputFile[:args.inputFile.find('.')]+"_translated_callsites.txt"
     if args.verbose: sys.stderr.write("writing to output file " + fileOut + "\n")
