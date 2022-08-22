@@ -34,10 +34,10 @@ def get_callsite(backTraceList, callsiteOnly):
     trimmed = backTraceList
     for i in range(1, len(backTraceList)):
         if (backTraceList[i][1].find("/omr/") != -1 or backTraceList[i][1].find("/openj9/") != -1) \
-            and (catch_line(backTraceList[i][1]) or not skip_line(backTraceList[i][1])):
+            and (catch_line(backTraceList[i][0]) or not skip_line(backTraceList[i][0])):
             trimmed = [backTraceList[i]] if callsiteOnly else backTraceList[:i+1]
             if i < len(backTraceList) - 2:
-                trimmed.append([backTraceList[i+1][0], ""])
+                trimmed.append(["", backTraceList[i+1][1]])
             return trimmed
     return trimmed
 
