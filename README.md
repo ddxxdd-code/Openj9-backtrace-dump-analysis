@@ -13,4 +13,5 @@ This will run translation `addr2func.py` on `<input_name>.txt` and pass outputs 
 
 Then will run analysis program `get_callsite.py` to get callsites and store in the file `<input_name>_translated_shorted[_<postfix>]_callsite.txt`
 
-Requirement for running backtrace_analyzer.py: need python of version 3.7+
+Newest version of analyzing scripts:
+Take dumped allocation backtraces and verbose log, feed dumped backtraces to `backtrace_analyzer.py`, feed the result of translated call sites and verbose log to `compilation_region_allocation_aggregation.py` to get the final result of compilations, regions, and allocations' backtraces.

@@ -40,7 +40,7 @@ def translate(line: str, f:io.IOBase) -> None:
         offset = line[start_bracket+1:end_bracket]
         stream = os.popen("addr2line -e " + line[:start_bracket] + " -f -C " + offset)
         file_line = line[:start_bracket]
-	file_line = file_line[len("/mnt/nvme/dedong2022/openj9_jdk/jdk_home/openj9-openjdk-jdk17-backtrace/build/linux-x86_64-server-release/images/jdk/lib/default"):]
+        file_line = file_line[len("/mnt/nvme/dedong2022/openj9_jdk/jdk_home/openj9-openjdk-jdk17-backtrace/build/linux-x86_64-server-release/images/jdk/lib/default"):]
         #file_line = file_line[len("/home/x/Desktop/dedong_2022_summer/jdk_home/openj9-openjdk-jdk17-backtrace/build/linux-x86_64-server-release/images/jdk/lib/default"):]
         output = stream.readlines()
         code = output[0]
