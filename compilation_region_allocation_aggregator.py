@@ -55,6 +55,7 @@ def get_associated_regions(callsites_file, compilations_list):
             # Header line for an allocation
             if allocation_backtrace != [] and allocation_size != 0:
                 allocation_list.append([allocation_size, allocation_backtrace])
+                allocation_backtrace = []
             in_region_header, in_allocation = False, True
             allocation_size = int((line.split())[1])
         elif in_region and line[0] == "=":
@@ -113,8 +114,7 @@ def main():
     if args.verbose: sys.stderr.write(f"Writing results to {args.output_file}\n")
     with open(args.output_file, "w") as output:
         for compilation in compilation_list:
-            print(len(aggregated_regions_dict[compilation]))
-            # write_output(output, aggregated_regions_dict[compilation], compilation)
+            write_output(output, aggregated_regions_dict[compilation], compilation)
     if args.verbose: sys.stderr.write(f"Program finished\n")
 
 if __name__ == "__main__":
