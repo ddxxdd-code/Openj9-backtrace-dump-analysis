@@ -99,7 +99,7 @@ def main():
     # Optional arguments
     parser.add_argument("-t", "--threshold", type=int, default=20000, help="threshold of memory usage for a compilation to be collected")
     # parser.add_argument("-c", "--compilation", type=str, nargs='+', help="only collect specified compilations of listed compilation sequence number")
-    parser.add_argument("-o", "--output-file", type=str, default="compilations.txt", help="name of the output file, default to <compilation sequence number>.txt")
+    parser.add_argument("-o", "--output-folder", type=str, default="compilations", help="name of the output folder (no slash), default to compilations/")
     parser.add_argument("-f", "--failed-only", action="store_true", help="set to collect failed compilations only")
     parser.add_argument("-v", "--verbose", action="store_true", help="set to run in verbose mode")
 
@@ -122,9 +122,10 @@ def main():
     for key in aggregated_regions_dict:
         aggregated_regions_dict[key].sort(reverse=True, key=lambda region: region[0])
 
-    if args.verbose: sys.stderr.write(f"Writing results to {args.output_file}\n")
-    with open(args.output_file, "w") as output:
-        for compilation in compilation_list:
+    if args.verbose: sys.stderr.write(f"Writing results to folder {args.output_folder}\n")
+    for compilation in compilation_list:
+        if args.verbose: sys.stderr.write(f"Writing to {args.output_folder}/{compilation[0]}.txt\n")
+        with open(args.output_folder + '/' + compilation[0] + ".txt", "w") as output:
             write_output(output, aggregated_regions_dict[compilation[0]], compilation[1], compilation[2], compilation[3])
     if args.verbose: sys.stderr.write(f"Program finished\n")
 

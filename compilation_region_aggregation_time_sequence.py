@@ -77,18 +77,9 @@ def get_associated_regions(callsites_file, compilations_list):
     return associated_regions
 
 # write output from list of regions to output
-def write_output(output_file, compilation_regions, method_compiled, opt_level, compilation_system_memory):
-    output_file.write(f"Regions from compilation of {method_compiled} at opt_level={opt_level}:\nTotal of {str(compilation_system_memory)}KB system memory used.\n")
+def write_output(output_file, compilation_regions):
     for total_allocated_bytes, region_type, region_start_time, region_end_time, region_constructor, allocations in compilation_regions:
-        output_file.write(f"type={region_type} total_allocation={total_allocated_bytes}Bytes start={region_start_time} end={region_end_time}\nregion constructor:\n")
-        for backtrace in region_constructor:
-            output_file.write("\t" + backtrace)
-        for size, allocation_backtrace in allocations:
-            output_file.write(f"size={size} Bytes\nallocation backtraces:\n")
-            for trace in allocation_backtrace:
-                output_file.write("\t" + trace)
-        output_file.write("=== End of a region ===\n")
-    output_file.write("===== End of Compilation =====\n")
+        output_file.write(f"{region_type} {total_allocated_bytes} {region_start_time} {region_end_time}\n")
 
 
 def main():
@@ -99,7 +90,7 @@ def main():
     # Optional arguments
     parser.add_argument("-t", "--threshold", type=int, default=20000, help="threshold of memory usage for a compilation to be collected")
     # parser.add_argument("-c", "--compilation", type=str, nargs='+', help="only collect specified compilations of listed compilation sequence number")
-    parser.add_argument("-o", "--output-file", type=str, default="compilations.txt", help="name of the output file, default to <compilation sequence number>.txt")
+    parser.add_argument("-o", "--output-file", type=str, default=".txt", help="name of the output file, default to <compilation sequence number>.txt")
     parser.add_argument("-f", "--failed-only", action="store_true", help="set to collect failed compilations only")
     parser.add_argument("-v", "--verbose", action="store_true", help="set to run in verbose mode")
 
@@ -111,7 +102,7 @@ def main():
     with open(args.performance_log_file, "r") as vlog:
         compilation_list = get_compilation_list(vlog, args.threshold, args.failed_only)
         compilation_seq_num_list = [compilation[0] for compilation in compilation_list]
-    if args.verbose: sys.stderr.write(f"list of compilations captured: \n" + " ".join(compilation_seq_num_list) + f"\ntotal of {len(compilation_seq_num_list)} compilations\n")
+    if args.verbose: sys.stderr.write(f"list of compilations captured: \n" + " ".join(compilation_seq_num_list) + f"\ntotal of {len(compilation_seq_num_list)}compilations\n")
 
     if args.verbose: 
         sys.stderr.write(f"Reading from {args.region_callsites_file}\n\t Aggregating " + " ".join(compilation_seq_num_list) + " compilations\n")
@@ -123,9 +114,9 @@ def main():
         aggregated_regions_dict[key].sort(reverse=True, key=lambda region: region[0])
 
     if args.verbose: sys.stderr.write(f"Writing results to {args.output_file}\n")
-    with open(args.output_file, "w") as output:
-        for compilation in compilation_list:
-            write_output(output, aggregated_regions_dict[compilation[0]], compilation[1], compilation[2], compilation[3])
+    for compilation in compilation_list:
+        with open("compilations/" + compilation[0] + '_' + args.output_file, "w") as output:
+            write_output(output, aggregated_regions_dict[compilation[0]])
     if args.verbose: sys.stderr.write(f"Program finished\n")
 
 if __name__ == "__main__":
