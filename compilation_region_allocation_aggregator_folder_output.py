@@ -120,7 +120,7 @@ def main():
 
     if args.verbose: sys.stderr.write(f"Sorting regions in decreasing order of total allocated bytes\n")
     for key in aggregated_regions_dict:
-        aggregated_regions_dict[key].sort(reverse=True, key=lambda region: region[0])
+        aggregated_regions_dict[key].sort(reverse=True, key=lambda region: int(region[0]))
 
     if args.verbose: sys.stderr.write(f"Writing results to folder {args.output_folder}\n")
     for compilation in compilation_list:
