@@ -109,10 +109,6 @@ def main():
     with open(args.region_callsites_file, "r") as callsites:
         aggregated_regions_dict = get_associated_regions(callsites, compilation_seq_num_list)
 
-    if args.verbose: sys.stderr.write(f"Sorting regions in decreasing order of total allocated bytes\n")
-    for key in aggregated_regions_dict:
-        aggregated_regions_dict[key].sort(reverse=True, key=lambda region: region[0])
-
     if args.verbose: sys.stderr.write(f"Writing results to {args.output_file}\n")
     for compilation in compilation_list:
         with open("compilations/" + compilation[0] + '_' + args.output_file, "w") as output:
