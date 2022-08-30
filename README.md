@@ -15,3 +15,8 @@ Then will run analysis program `get_callsite.py` to get callsites and store in t
 
 Newest version of analyzing scripts:
 Take dumped allocation backtraces and verbose log, feed dumped backtraces to `backtrace_analyzer.py`, feed the result of translated call sites and verbose log to `compilation_region_allocation_aggregation.py` to get the final result of compilations, regions, and allocations' backtraces.
+
+Latest update:
+feed the result of translated call sites and verbose log to `compilation_region_aggregation_timesequence.py` and `compilation_region_aggregation_folder_output.py` to get the files of regions' time sequences, and files of regions aggregated to each compilation.
+
+For the regions' time sequence file, use `plot_regions.py` to plot the figure of regions' memory usage logical timeline.
