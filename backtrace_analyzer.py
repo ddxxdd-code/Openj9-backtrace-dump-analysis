@@ -30,111 +30,111 @@ def catch_line(line):
             return True
     return False
 
-def get_callsite(backTraceList, callsiteOnly):
-    trimmed = backTraceList
-    for i in range(1, len(backTraceList)):
-        if (backTraceList[i][1].find("/omr/") != -1 or backTraceList[i][1].find("/openj9/") != -1) \
-            and (catch_line(backTraceList[i][0]) or not skip_line(backTraceList[i][0])):
-            trimmed = [backTraceList[i]] if callsiteOnly else backTraceList[:i+1]
-            if i < len(backTraceList) - 2:
-                trimmed.append(["", backTraceList[i+1][1]])
+def get_callsite(backtrace_list, allocation_site_only):
+    trimmed = backtrace_list
+    for i in range(1, len(backtrace_list)):
+        if (backtrace_list[i][1].find("/omr/") != -1 or backtrace_list[i][1].find("/openj9/") != -1) \
+            and (catch_line(backtrace_list[i][0]) or not skip_line(backtrace_list[i][0])):
+            trimmed = [backtrace_list[i]] if allocation_site_only else backtrace_list[:i+1]
+            if i < len(backtrace_list) - 2:
+                trimmed.append(["", backtrace_list[i+1][1]])
             return trimmed
     return trimmed
 
 # From list of offsets, build dict to translate from offset to lines
-def build_translation_table(executableFilePath, offsetList, funcDict):
-    args = ["addr2line", "-e", executableFilePath, "-f", "-C"]
-    args += offsetList
+def build_translation_table(executable_file_path, offset_list, offset_translation_dict):
+    args = ["addr2line", "-e", executable_file_path, "-f", "-C"]
+    args += offset_list
     output = subprocess.run(args, stdout=subprocess.PIPE, universal_newlines=True).stdout
     output = output.splitlines()
-    if len(output) != 2 * len(offsetList):
+    if len(output) != 2 * len(offset_list):
         sys.stderr.write("Translation error\n")
         return {}
-    for i in range(len(offsetList)):
+    for i in range(len(offset_list)):
         line = output[2*i+1]
         if "/openj9/" in line:
             line = line[line.find("/openj9/"):]
         if "/omr/" in line:
             line = line[line.find("/omr/"):]
-        funcDict[offsetList[i]] = [output[2*i], line]
-    return funcDict
+        offset_translation_dict[offset_list[i]] = [output[2*i], line]
+    return offset_translation_dict
 
 # Read from formatted lines produce list of all offsets of interest
 def read_offsets(file):
-    offsetSet = set()
+    offset_set = set()
     line = file.readline()
     while line:
         if line[0].isalpha():
             # Start of header for a region
             line = file.readline()
-            constructorOffsets = (line.split())[1:-1]
-            offsetSet |= set(constructorOffsets)
+            constructor_offsets = (line.split())[1:-1]
+            offset_set |= set(constructor_offsets)
         else:
             # Allocations in a region
-            allocationBackTraces = (line.split())[1:-1]
-            offsetSet |= set(allocationBackTraces)
+            allocation_stack_traces = (line.split())[1:-1]
+            offset_set |= set(allocation_stack_traces)
         line = file.readline()
-    return list(offsetSet)
+    return list(offset_set)
 
 # Parse input file and write translated callsites to output file
-def write_translated_callsites(inputFile, funcDict, outputFile, translateOnly, callsiteOnly):
-    allocationList = []
-    constructorBackTrace = []
-    regionType, methodCompiled = "", ""
-    line = inputFile.readline()
+def write_translated_callsites(input_file, offset_translation_dict, output_file, translate_only, allocation_site_only):
+    allocation_list = []
+    constructor_stack_trace = []
+    region_type, method_compiled = "", ""
+    line = input_file.readline()
     while line:
         if line[0].isalpha():
-            if allocationList != []:
+            if allocation_list != []:
                 # print header
-                outputFile.write(regionType + ": " + methodCompiled)
-                for function, callLine in constructorBackTrace:
-                    outputFile.write(callLine[:-1] + "; " + function + '\n')
+                output_file.write(region_type + ": " + method_compiled)
+                for function, line_of_call in constructor_stack_trace:
+                    output_file.write(line_of_call[:-1] + "; " + function + '\n')
                 # print allocations
-                allocationList.sort(reverse=True, key=lambda x: x[0])
-                for allocationSize, allocationBackTraceList in allocationList:
-                    outputFile.write("Allocated " + str(allocationSize) + " bytes\n")
-                    for function, callLine in allocationBackTraceList:
-                        outputFile.write(callLine[:-1] + "; " + function + '\n')
-                outputFile.write("=== End of a region ===\n")
-                allocationList = []
-                constructorBackTrace = []
-                regionType, methodCompiled = "", ""
+                allocation_list.sort(reverse=True, key=lambda x: x[0])
+                for allocation_size, allocation_stack_trace_list in allocation_list:
+                    output_file.write("Allocated " + str(allocation_size) + " bytes\n")
+                    for function, line_of_call in allocation_stack_trace_list:
+                        output_file.write(line_of_call[:-1] + "; " + function + '\n')
+                output_file.write("=== End of a region ===\n")
+                allocation_list = []
+                constructor_stack_trace = []
+                region_type, method_compiled = "", ""
             # Start of header for a region
-            methodCompiled = line
-            line = inputFile.readline()
+            method_compiled = line
+            line = input_file.readline()
             if line[0] == '0':
-                regionType = 'S'
+                region_type = 'S'
             else:
-                regionType = 'H'
-            constructorBackTraceOffsets = (line.split())[1:-1]
-            for offset in constructorBackTraceOffsets:
-                constructorBackTrace.append(funcDict[offset])
+                region_type = 'H'
+            constructor_stack_trace_offsets = (line.split())[1:-1]
+            for offset in constructor_stack_trace_offsets:
+                constructor_stack_trace.append(offset_translation_dict[offset])
         else:
             # Allocations in a region
             allocation = (line.split())[:-1]
-            allocationSize = int(allocation[0])
-            allocationBackTraces = allocation[1:]
-            allocationBackTraceList = []
-            for offset in allocationBackTraces:
-                # Here, funcDict's value is a pair of function name and line
+            allocation_size = int(allocation[0])
+            allocation_stack_traces = allocation[1:]
+            allocation_stack_trace_list = []
+            for offset in allocation_stack_traces:
+                # Here, offset_translation_dict's value is a pair of function name and line
                 # We assume offset is a key in the dict
-                allocationBackTraceList.append(funcDict[offset])
+                allocation_stack_trace_list.append(offset_translation_dict[offset])
             # Find callsite from translated call back traces
-            if not translateOnly: allocationBackTraceList = get_callsite(allocationBackTraceList, callsiteOnly)
-            allocationList.append([allocationSize, allocationBackTraceList])
-        line = inputFile.readline()
-    if allocationList != []:
+            if not translate_only: allocation_stack_trace_list = get_callsite(allocation_stack_trace_list, allocation_site_only)
+            allocation_list.append([allocation_size, allocation_stack_trace_list])
+        line = input_file.readline()
+    if allocation_list != []:
         # print header
-        outputFile.write(regionType + ": " + methodCompiled)
-        for function, line in constructorBackTrace:
-            outputFile.write(line[:-1] + "; " + function + '\n')
+        output_file.write(region_type + ": " + method_compiled)
+        for function, line in constructor_stack_trace:
+            output_file.write(line[:-1] + "; " + function + '\n')
         # print allocations
-        allocationList.sort(reverse=True, key=lambda x: x[0])
-        for allocationSize, allocationBackTraceList in allocationList:
-            outputFile.write("Allocated " + str(allocationSize) + " bytes\n")
-            for function, line in allocationBackTraceList:
-                outputFile.write(line[:-1] + "; " + function + '\n')
-        outputFile.write("=== End of a region ===\n")
+        allocation_list.sort(reverse=True, key=lambda x: x[0])
+        for allocation_size, allocation_stack_trace_list in allocation_list:
+            output_file.write("Allocated " + str(allocation_size) + " bytes\n")
+            for function, line in allocation_stack_trace_list:
+                output_file.write(line[:-1] + "; " + function + '\n')
+        output_file.write("=== End of a region ===\n")
 
 def main():
     parser = argparse.ArgumentParser()
@@ -144,7 +144,7 @@ def main():
     # Optional arguments
     parser.add_argument("-b", "--batch-size", type=int, default=10000, help="integer for batch size of input to addr2line")
     parser.add_argument("-c", "--callsite-only", action="store_true", help="set to only keep the line of callsite in all back traces")
-    parser.add_argument("-o", "--output-file", type=str, help="name of the output file, default to <inputFile>_translated_callsites.txt")
+    parser.add_argument("-o", "--output-file", type=str, help="name of the output file, default to <input_file>_translated_callsites.txt")
     parser.add_argument("-t", "--translation-only", action="store_true", help="set to only translates offsets do no call site find")
     parser.add_argument("-v", "--verbose", action="store_true", help="set to run in verbose mode")
 
@@ -152,24 +152,24 @@ def main():
 
     if args.verbose: sys.stderr.write("reading from " + args.input_file + "\n")
     with open(args.input_file, "r") as input:
-        offsetList = read_offsets(input)
+        offset_list = read_offsets(input)
 
     if args.verbose:
-        sys.stderr.write("Total offsets: " + str(len(offsetList)) + "\n")
+        sys.stderr.write("Total offsets: " + str(len(offset_list)) + "\n")
 
-    translationTable = {}
+    offset_translation_dict = {}
     i = 0
     step = args.batch_size
-    for i in range(0, len(offsetList), step):
+    for i in range(0, len(offset_list), step):
         if args.verbose: sys.stderr.write("translating " + str(i) + " to " + str(i+step) + " of all offsets\n")
-        translationTable = build_translation_table(args.executable_file_path, offsetList[i:i+step], translationTable)
+        offset_translation_dict = build_translation_table(args.executable_file_path, offset_list[i:i+step], offset_translation_dict)
     
-    fileOut = args.output_file if args.output_file else args.inputFile[:args.inputFile.find('.')]+"_translated_callsites.txt"
-    if args.verbose: sys.stderr.write("writing to output file " + fileOut + "\n")
+    output_file = args.output_file if args.output_file else args.input_file[:args.input_file.find('.')]+"_translated_callsites.txt"
+    if args.verbose: sys.stderr.write("writing to output file " + output_file + "\n")
     with open(args.input_file, "r") as input:
-        with open(fileOut, "w") as output:
-            write_translated_callsites(input, translationTable, output, args.translation_only, args.callsite_only)
-    if args.verbose: sys.stderr.write("finished writing to file " + fileOut + "\nprogram finished\n")
+        with open(output_file, "w") as output:
+            write_translated_callsites(input, offset_translation_dict, output, args.translation_only, args.callsite_only)
+    if args.verbose: sys.stderr.write("finished writing to file " + output_file + "\nprogram finished\n")
 
 if __name__ == "__main__":
     main()
