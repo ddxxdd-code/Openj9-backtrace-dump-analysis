@@ -44,11 +44,11 @@ def get_associated_regions(callsites_file, compilations_list):
     line = callsites_file.readline()
     region_constructor_backtrace, allocation_list, allocation_backtrace = [], [], []
     in_region, in_region_header, in_allocation = False, False, False
-    region_type, method_compiled, compilation_seq_num, region_start_time, region_end_time, region_total_allocation_size, allocation_size = None, None, None, None, None, None, 0
+    region_type, method_compiled, compilation_seq_num, region_start_time, region_end_time, region_total_allocation_size, segment_provider_allocation_size, segment_provider_free_size, segment_provider_in_use_allocated, segment_provider_in_use_freed, segment_provider_real_in_use_allocated, segment_provider_real_in_use_freed, allocation_size = None, None, None, None, None, None, None, None, None, None, None, None, 0
     while line:
         if line[0] == 'H' or line[0] == 'S':
             # header of a region
-            region_type, method_compiled, compilation_seq_num, region_start_time, region_end_time, region_total_allocation_size = line[:-1].split()
+            region_type, method_compiled, compilation_seq_num, region_start_time, region_end_time, region_total_allocation_size, segment_provider_allocation_size, segment_provider_free_size, segment_provider_in_use_allocated, segment_provider_in_use_freed, segment_provider_real_in_use_allocated, segment_provider_real_in_use_freed = line[:-1].split()
             if compilation_seq_num in compilations_list:
                 in_region, in_region_header = True, True
         elif in_region and line[0] == '/':
@@ -68,7 +68,7 @@ def get_associated_regions(callsites_file, compilations_list):
             # End of a target region
             if allocation_backtrace != [] and allocation_size != 0:
                 allocation_list.append([allocation_size, allocation_backtrace])
-            associated_regions[compilation_seq_num].append([region_total_allocation_size, region_type, region_start_time, region_end_time, region_constructor_backtrace, allocation_list])
+            associated_regions[compilation_seq_num].append([region_total_allocation_size, region_type, region_start_time, region_end_time, segment_provider_allocation_size, segment_provider_free_size, segment_provider_in_use_allocated, segment_provider_in_use_freed, segment_provider_real_in_use_allocated, segment_provider_real_in_use_freed, region_constructor_backtrace, allocation_list])
             # reinitialize everything
             region_constructor_backtrace, allocation_list, allocation_backtrace = [], [], []
             in_region, in_region_header, in_allocation = False, False, False
@@ -78,8 +78,8 @@ def get_associated_regions(callsites_file, compilations_list):
 
 # write output from list of regions to output
 def write_output(output_file, compilation_regions):
-    for total_allocated_bytes, region_type, region_start_time, region_end_time, region_constructor, allocations in compilation_regions:
-        output_file.write(f"{region_type} {total_allocated_bytes} {region_start_time} {region_end_time}\n")
+    for total_allocated_bytes, region_type, region_start_time, region_end_time, segment_provider_allocation_size, segment_provider_free_size, segment_provider_in_use_allocated, segment_provider_in_use_freed, segment_provider_real_in_use_allocated, segment_provider_real_in_use_freed, region_constructor, allocations in compilation_regions:
+        output_file.write(f"{region_type} {total_allocated_bytes} {region_start_time} {region_end_time} {segment_provider_allocation_size} {segment_provider_free_size} {segment_provider_in_use_allocated} {segment_provider_in_use_freed} {segment_provider_real_in_use_allocated} {segment_provider_real_in_use_freed}\n")
 
 
 def main():
@@ -109,10 +109,14 @@ def main():
     with open(args.region_callsites_file, "r") as callsites:
         aggregated_regions_dict = get_associated_regions(callsites, compilation_seq_num_list)
 
-    if args.verbose: sys.stderr.write(f"Writing results to {args.output_file}\n")
+    if args.verbose: sys.stderr.write(f"Sorting regions in decreasing order of total allocated bytes\n")
+    for key in aggregated_regions_dict:
+        aggregated_regions_dict[key].sort(reverse=True, key=lambda region: int(region[0]))
+
+    if args.verbose: sys.stderr.write(f"Writing results to <compilation_seq_num>_{args.output_file}\n")
     for compilation in compilation_list:
         if aggregated_regions_dict[compilation[0]] != []:
-            with open("compilations/" + compilation[0] + '_' + args.output_file, "w") as output:
+            with open(compilation[0] + '_' + args.output_file, "w") as output:
                 write_output(output, aggregated_regions_dict[compilation[0]])
     if args.verbose: sys.stderr.write(f"Program finished\n")
 
