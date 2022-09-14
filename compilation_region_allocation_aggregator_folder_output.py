@@ -124,9 +124,10 @@ def main():
 
     if args.verbose: sys.stderr.write(f"Writing results to folder {args.output_folder}\n")
     for compilation in compilation_list:
-        if args.verbose: sys.stderr.write(f"Writing to {args.output_folder}/{compilation[0]}.txt\n")
-        with open(args.output_folder + '/' + compilation[0] + ".txt", "w") as output:
-            write_output(output, aggregated_regions_dict[compilation[0]], compilation[1], compilation[2], compilation[3])
+        if aggregated_regions_dict[compilation[0]] != []:
+            if args.verbose: sys.stderr.write(f"Writing to {args.output_folder}/{compilation[0]}.txt\n")
+            with open(args.output_folder + '/' + compilation[0] + ".txt", "w") as output:
+                write_output(output, aggregated_regions_dict[compilation[0]], compilation[1], compilation[2], compilation[3])
     if args.verbose: sys.stderr.write(f"Program finished\n")
 
 if __name__ == "__main__":

@@ -111,8 +111,9 @@ def main():
 
     if args.verbose: sys.stderr.write(f"Writing results to {args.output_file}\n")
     for compilation in compilation_list:
-        with open("compilations/" + compilation[0] + '_' + args.output_file, "w") as output:
-            write_output(output, aggregated_regions_dict[compilation[0]])
+        if aggregated_regions_dict[compilation[0]] != []:
+            with open("compilations/" + compilation[0] + '_' + args.output_file, "w") as output:
+                write_output(output, aggregated_regions_dict[compilation[0]])
     if args.verbose: sys.stderr.write(f"Program finished\n")
 
 if __name__ == "__main__":
