@@ -44,11 +44,13 @@ def get_associated_regions(callsites_file, compilations_list):
     line = callsites_file.readline()
     region_constructor_backtrace, allocation_list, allocation_backtrace = [], [], []
     in_region, in_region_header, in_allocation = False, False, False
-    region_type, method_compiled, compilation_seq_num, region_start_time, region_end_time, region_total_allocation_size, segment_provider_allocation_size, segment_provider_free_size, segment_provider_in_use_allocated, segment_provider_in_use_freed, segment_provider_real_in_use_allocated, segment_provider_real_in_use_freed, allocation_size = None, None, None, None, None, None, None, None, None, None, None, None, 0
+    region_type, method_compiled, compilation_seq_num, region_start_time, region_end_time, \
+        region_total_allocation_size, segment_provider_allocation_size, segment_provider_free_size, segment_provider_in_use_allocated, segment_provider_in_use_freed, \
+            segment_provider_real_in_use_allocated, segment_provider_real_in_use_freed, segment_provider_start_usage, segment_provider_end_usage, allocation_size = None, None, None, None, None, None, None, None, None, None, None, None, None, None, 0
     while line:
         if line[0] == 'H' or line[0] == 'S':
             # header of a region
-            region_type, method_compiled, compilation_seq_num, region_start_time, region_end_time, region_total_allocation_size, segment_provider_allocation_size, segment_provider_free_size, segment_provider_in_use_allocated, segment_provider_in_use_freed, segment_provider_real_in_use_allocated, segment_provider_real_in_use_freed = line[:-1].split()
+            region_type, method_compiled, compilation_seq_num, region_start_time, region_end_time, region_total_allocation_size, segment_provider_allocation_size, segment_provider_free_size, segment_provider_in_use_allocated, segment_provider_in_use_freed, segment_provider_real_in_use_allocated, segment_provider_real_in_use_freed, segment_provider_start_usage, segment_provider_end_usage = line[:-1].split()
             if compilation_seq_num in compilations_list:
                 in_region, in_region_header = True, True
         elif in_region and line[0] == '/':
@@ -68,7 +70,7 @@ def get_associated_regions(callsites_file, compilations_list):
             # End of a target region
             if allocation_backtrace != [] and allocation_size != 0:
                 allocation_list.append([allocation_size, allocation_backtrace])
-            associated_regions[compilation_seq_num].append([region_total_allocation_size, region_type, region_start_time, region_end_time, segment_provider_allocation_size, segment_provider_free_size, segment_provider_in_use_allocated, segment_provider_in_use_freed, segment_provider_real_in_use_allocated, segment_provider_real_in_use_freed, region_constructor_backtrace, allocation_list])
+            associated_regions[compilation_seq_num].append([region_total_allocation_size, region_type, region_start_time, region_end_time, segment_provider_allocation_size, segment_provider_free_size, segment_provider_in_use_allocated, segment_provider_in_use_freed, segment_provider_real_in_use_allocated, segment_provider_real_in_use_freed, segment_provider_start_usage, segment_provider_end_usage, region_constructor_backtrace, allocation_list])
             # reinitialize everything
             region_constructor_backtrace, allocation_list, allocation_backtrace = [], [], []
             in_region, in_region_header, in_allocation = False, False, False
@@ -79,8 +81,8 @@ def get_associated_regions(callsites_file, compilations_list):
 # write output from list of regions to output
 def write_output(output_file, compilation_regions, method_compiled, opt_level, compilation_system_memory):
     output_file.write(f"Regions from compilation of {method_compiled} at opt_level={opt_level}:\nTotal of {str(compilation_system_memory)}KB system memory used.\n")
-    for total_allocated_bytes, region_type, region_start_time, region_end_time, segment_provider_allocation_size, segment_provider_free_size, segment_provider_in_use_allocated, segment_provider_in_use_freed, segment_provider_real_in_use_allocated, segment_provider_real_in_use_freed, region_constructor, allocations in compilation_regions:
-        output_file.write(f"type={region_type} total_allocation={total_allocated_bytes}Bytes segmentProvider_total_allocation={segment_provider_allocation_size}Bytes segmentProvider_total_free={segment_provider_free_size}Bytes segmentProvider_in_use_allocation={segment_provider_in_use_allocated}Bytes segmentProvider_in_use_free={segment_provider_in_use_freed}Bytes segmentProvider_real_in_use_allocation={segment_provider_real_in_use_allocated}Bytes segmentProvider_real_in_use_free={segment_provider_real_in_use_freed}Bytes start={region_start_time} end={region_end_time}\nregion constructor:\n")
+    for total_allocated_bytes, region_type, region_start_time, region_end_time, segment_provider_allocation_size, segment_provider_free_size, segment_provider_in_use_allocated, segment_provider_in_use_freed, segment_provider_real_in_use_allocated, segment_provider_real_in_use_freed, segment_provider_start_usage, segment_provider_end_usage, region_constructor, allocations in compilation_regions:
+        output_file.write(f"type={region_type} total_allocation={total_allocated_bytes}Bytes segmentProvider_total_allocation={segment_provider_allocation_size}Bytes segmentProvider_total_free={segment_provider_free_size}Bytes segmentProvider_in_use_allocation={segment_provider_in_use_allocated}Bytes segmentProvider_in_use_free={segment_provider_in_use_freed}Bytes segmentProvider_real_in_use_allocation={segment_provider_real_in_use_allocated}Bytes segmentProvider_real_in_use_free={segment_provider_real_in_use_freed}Bytes start={region_start_time} end={region_end_time} startUsage={segment_provider_start_usage} endUsage={segment_provider_end_usage}\nregion constructor:\n")
         for backtrace in region_constructor:
             output_file.write("\t" + backtrace)
         for size, allocation_backtrace in allocations:
