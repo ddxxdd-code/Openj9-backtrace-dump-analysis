@@ -5,7 +5,6 @@
 # Phase 1: implement translation DONE 0815 Reduce reading overhead 0816
 # Phase 2: implement call site find DONE 0817
 # phase 3: implement parser of options DONE 0817
-# revised 1222 for compatability with new dump file format.
 
 from copyreg import constructor
 import subprocess

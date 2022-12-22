@@ -1,0 +1,5 @@
+/mnt/nvme/dedong2022/openj9_jdk/openj9-openjdk-jdk17/build/linux-x86_64-server-release/jdk/bin/java -Xnoaot '-Xjit:{EmptyMethod.main([Ljava/lang/String;)V}(optLevel=noopt,count=0),collectRegionLog,compilationRegionLogFileName=empty_alloctrace.log,minMemoryCollectRegionLog=16384,minOptLevelCollectRegionLog=0' empty.java
+
+python3 compilation_splitter.py acmeair_alloctrace_v20221222.log acmeair_compilations_raw_v20221222 -v
+
+python3 time_seq_getter.py acmeair_compilations_raw_v20221222/10078_190644224.txt acmeair_compilations_raw_v20221222/10078_time_seq.txt -v
